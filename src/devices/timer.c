@@ -216,15 +216,13 @@ timer_interrupt (struct intr_frame *args UNUSED)
   */
 
   struct list_elem *e = list_begin(&sleep_list);
-  bool run = true;
-  while(run){
+  while(e != list_end(&sleep_list)) {
     struct sleep_entry *entry = list_entry(e, struct sleep_entry, elem); // this is the way to get the struct from the list
     if (entry->wake_up_time <= ticks) {
-      list_remove(e);
+      e = list_remove(e);
       thread_unblock(entry->thread);
-      e = list_begin(&sleep_list);
     } else {
-      run = false; // breaks out of the loop early because we know none of the other threads will be ready yet
+      break; // breaks out of the loop early because we know none of the other threads will be ready yet
     }
   }
 }
