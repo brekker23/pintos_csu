@@ -70,6 +70,8 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
+static bool sort_priority_less(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+void preempt();
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -245,10 +247,20 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == PINTHR_BLOCKED);
-  list_ins_back (&ready_list, &t->elem);
+  list_insert_ordered (&ready_list, &t->elem, sort_priority_less, NULL);
   t->status = PINTHR_READY;
   intr_set_level (old_level);
+
+  /* considered preempting current thread if prempted thread is higher priority but it didn't work so removed it */
 }
+
+/* return boolean value of if element a has a higher priority than element b */
+static bool sort_priority_less(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
+  struct thread *thread_a = list_entry(a, struct thread, elem);
+  struct thread *thread_b = list_entry(b, struct thread, elem);
+  return thread_a->priority > thread_b->priority;
+}
+
 
 /* Returns the name of the running thread. */
 const char *
@@ -316,7 +328,7 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_ins_back (&ready_list, &cur->elem);
+    list_insert_ordered (&ready_list, &cur->elem, sort_priority_less, NULL);
   cur->status = PINTHR_READY;
   schedule ();
   intr_set_level (old_level);
@@ -344,6 +356,20 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
+  // list_remove(&thread_current()->elem);
+  // list_insert_ordered(&ready_list, &thread_current()->elem, sort_priority_less, NULL);
+
+  /* preempt current thread if the next thread is a higher priority */
+  preempt();
+}
+
+/* preempt the current thread if next thread is higher priority */
+void preempt() {
+  struct thread *cur = thread_current();
+  struct thread *next = list_entry(list_front(&ready_list), struct thread, elem);
+  if (cur->priority < next->priority) {
+    thread_yield();
+  }
 }
 
 /* Returns the current thread's priority. */
@@ -469,7 +495,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = PINTHR_MAGIC;
-  list_ins_back (&all_list, &t->allelem);
+  list_insert_ordered (&all_list, &t->allelem, sort_priority_less, NULL);
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -490,6 +516,8 @@ alloc_frame (struct thread *t, size_t size)
    empty.  (If the running thread can continue running, then it
    will be in the run queue.)  If the run queue is empty, return
    idle_thread. */
+
+/* chooses the first thread in the ready_list, i need to ensure the ready list is sorted by priority*/
 static struct thread *
 next_thread_to_run (void) 
 {

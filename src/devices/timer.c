@@ -117,15 +117,19 @@ timer_sleep (int64_t ticks)
   entry.thread = thread_current();
   entry.wake_up_time = wake_up_time;
 
-
-  enum intr_level old_level = intr_disable(); // not sure if i need this gonna try it without -- doesn't seem to?
+  /* disable interrupts while inserting into sleep_list*/
+  enum intr_level old_level = intr_disable();
 
   list_insert_ordered(&sleep_list, &entry.elem, sort_less, NULL);
   thread_block();
 
-  intr_set_level(old_level); // not sure about this but we'll see if it works without it -- doesn't seem to?
+  intr_set_level(old_level);
 }
 
+
+/* This function returns boolean value true if element a has a sooner wake up time than element b.
+* This is useful for allowing us to sort the list of sleeping threads by their wake up time.
+*/
 static bool sort_less(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
   struct sleep_entry *entry_a = list_entry(a, struct sleep_entry, elem);
   struct sleep_entry *entry_b = list_entry(b, struct sleep_entry, elem);
