@@ -22,7 +22,7 @@
 
 /* List of processes in PINTHR_READY state, that is, processes
    that are ready to run but not actually running. */
-static struct list ready_list;
+struct list ready_list;
 
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
@@ -36,6 +36,8 @@ static struct thread *initial_thread;
 
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
+
+bool priority_compare(const struct list_elem *a, const struct list_elem *b, void *aux);
 
 /* Stack frame for kernel_thread(). */
 struct kernel_thread_frame 
@@ -67,11 +69,9 @@ static struct thread *next_thread_to_run (void);
 static void init_thread (struct thread *, const char *name, int priority);
 static bool is_thread (struct thread *) UNUSED;
 static void *alloc_frame (struct thread *, size_t size);
-static void schedule (void);
+void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
-static bool sort_priority_less(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
-void preempt();
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -211,6 +211,9 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
+  //yield to see if new thread should run
+  thread_yield();
+
   return tid;
 }
 
@@ -247,20 +250,10 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == PINTHR_BLOCKED);
-  list_insert_ordered (&ready_list, &t->elem, sort_priority_less, NULL);
+  list_insert_ordered(&ready_list, &t->elem, priority_compare, NULL);
   t->status = PINTHR_READY;
   intr_set_level (old_level);
-
-  /* considered preempting current thread if prempted thread is higher priority but it didn't work so removed it */
 }
-
-/* return boolean value of if element a has a higher priority than element b */
-static bool sort_priority_less(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
-  struct thread *thread_a = list_entry(a, struct thread, elem);
-  struct thread *thread_b = list_entry(b, struct thread, elem);
-  return thread_a->priority > thread_b->priority;
-}
-
 
 /* Returns the name of the running thread. */
 const char *
@@ -328,7 +321,7 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_insert_ordered (&ready_list, &cur->elem, sort_priority_less, NULL);
+    list_insert_ordered(&ready_list,&cur->elem, priority_compare, NULL);
   cur->status = PINTHR_READY;
   schedule ();
   intr_set_level (old_level);
@@ -355,29 +348,8 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  enum intr_level old_level;
-  old_level = intr_disable();
-  thread_current ()->priority = new_priority;
-  intr_set_level(old_level);
-
-  /* preempt current thread if the next thread is a higher priority */
-  preempt();
-}
-
-/* preempt the current thread if next thread is higher priority */
-void preempt() {
-  enum intr_level old_level;
-  old_level = intr_disable();
-  struct thread *cur = thread_current();
-  if (list_empty(&ready_list)) {
-    intr_set_level(old_level);
-    return;
-  }
-  struct thread *next = list_entry(list_front(&ready_list), struct thread, elem);
-  if (cur->priority < next->priority) {
-    thread_yield();
-  }
-  intr_set_level(old_level);
+  thread_current()->priority = new_priority;
+  thread_yield();
 }
 
 /* Returns the current thread's priority. */
@@ -503,7 +475,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = PINTHR_MAGIC;
-  list_insert_ordered (&all_list, &t->allelem, sort_priority_less, NULL);
+  list_insert_ordered (&all_list, &t->allelem, priority_compare, NULL);
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -524,8 +496,6 @@ alloc_frame (struct thread *t, size_t size)
    empty.  (If the running thread can continue running, then it
    will be in the run queue.)  If the run queue is empty, return
    idle_thread. */
-
-/* chooses the first thread in the ready_list, i need to ensure the ready list is sorted by priority*/
 static struct thread *
 next_thread_to_run (void) 
 {
@@ -588,7 +558,7 @@ thread_schedule_tail (struct thread *prev)
 
    It's not safe to call printf() until thread_schedule_tail()
    has completed. */
-static void
+void
 schedule (void) 
 {
   struct thread *cur = running_thread ();
@@ -599,9 +569,9 @@ schedule (void)
   ASSERT (cur->status != PINTHR_RUNNING);
   ASSERT (is_thread (next));
 
-  if (cur != next)
+  if (cur != next || cur->priority < next->priority)
     prev = switch_threads (cur, next);
-  thread_schedule_tail (prev);
+    thread_schedule_tail (prev);
 }
 
 /* Returns a tid to use for a new thread. */
@@ -621,3 +591,16 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+bool priority_compare(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED){
+
+  struct thread *x = list_entry(a,struct thread, elem);
+  struct thread *y = list_entry(b,struct thread, elem);
+
+  if (x-> priority > y-> priority){
+    return true;
+  }else{
+    return false;
+  }
+
+}
