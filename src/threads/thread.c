@@ -365,11 +365,7 @@ thread_set_priority (int new_priority)
 
 /* preempt the current thread if next thread is higher priority */
 void preempt() {
-  struct thread *cur = thread_current();
-  struct thread *next = list_entry(list_front(&ready_list), struct thread, elem);
-  if (cur->priority < next->priority) {
-    thread_yield();
-  }
+  // fill in with a preempt function
 }
 
 /* Returns the current thread's priority. */
