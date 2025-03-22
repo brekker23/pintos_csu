@@ -34,6 +34,7 @@
 
 bool sort_sema_less(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 
+bool higher_priority_thread_unblocked = false;
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it: 
@@ -121,13 +122,21 @@ sem_up (struct semaphore *sema)
 {
   enum intr_level old_level;
 
+  higher_priority_thread_unblocked = false;
   ASSERT (sema != NULL);
-
   old_level = intr_disable ();
-  if (!list_empty (&sema->waiters)) 
-    thread_unblock (list_entry (list_rem_front (&sema->waiters), struct thread, elem));
+  if (!list_empty (&sema->waiters)) {
+    struct thread *t = list_entry (list_rem_front (&sema->waiters), struct thread, elem);
+    struct thread *cur = thread_current ();
+    thread_unblock (t);
+    if(cur->priority < t->priority)
+         higher_priority_thread_unblocked = true;
+  }
+
   sema->value++;
   intr_set_level (old_level);
+  if ( higher_priority_thread_unblocked)
+        thread_yield();
 }
 
 static void sem_test_helper (void *sem_);
