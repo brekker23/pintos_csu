@@ -211,7 +211,7 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
-  //yield to see if new thread should run
+  /* call yield to preempt the current thread,*/
   thread_yield();
 
   return tid;
