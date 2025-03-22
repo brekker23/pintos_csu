@@ -41,7 +41,7 @@ static void *consumer(void *arg2) {
    }   
    return NULL;
 }
- 
+
 void test_prod_cons(void) {
    lock_init(&buffer_lock);
    sem_init(&full, 0);
