@@ -46,8 +46,7 @@ void test_prod_cons(void) {
    lock_init(&buffer_lock);
    sem_init(&full, 0);
    sem_init(&empty, BUFSIZE);
-   thread_create("producer", PRTY_DEFAULT, producer, NULL);
-   thread_create("consumer", PRTY_DEFAULT, consumer, NULL);
+   thread_create("producer", 34, producer, NULL);
+   thread_create("consumer", 30, consumer, NULL);
    thread_exit();
 }
-
