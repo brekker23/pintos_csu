@@ -355,9 +355,10 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
+  enum intr_level old_level;
+  old_level = intr_disable();
   thread_current ()->priority = new_priority;
-  // list_remove(&thread_current()->elem);
-  // list_insert_ordered(&ready_list, &thread_current()->elem, sort_priority_less, NULL);
+  intr_set_level(old_level);
 
   /* preempt current thread if the next thread is a higher priority */
   preempt();
@@ -365,7 +366,18 @@ thread_set_priority (int new_priority)
 
 /* preempt the current thread if next thread is higher priority */
 void preempt() {
-  // fill in with a preempt function
+  enum intr_level old_level;
+  old_level = intr_disable();
+  struct thread *cur = thread_current();
+  if (list_empty(&ready_list)) {
+    intr_set_level(old_level);
+    return;
+  }
+  struct thread *next = list_entry(list_front(&ready_list), struct thread, elem);
+  if (cur->priority < next->priority) {
+    thread_yield();
+  }
+  intr_set_level(old_level);
 }
 
 /* Returns the current thread's priority. */
